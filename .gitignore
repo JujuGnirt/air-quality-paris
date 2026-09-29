@@ -1,0 +1,18 @@
+# --- SECRETS : ne JAMAIS envoyer sur GitHub ---------------------------------
+# Clés d'API et mot de passe MySQL (voir cles.env.exemple pour le modèle).
+secrets/
+*.env
+.env
+!cles.env.exemple
+
+# --- Données : trop volumineuses pour GitHub (limite de 100 Mo par fichier) --
+# Elles se régénèrent avec les scripts.
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# --- Fichiers techniques de Python ------------------------------------------
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
