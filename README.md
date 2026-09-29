@@ -1,5 +1,5 @@
 # Air quality in Paris: forecasting PM2.5 one day ahead
-RNCP37827 (Développeur en intelligence artificielle), block BC01 · Julie TRING · September 2026 · report: `reports/RNCP_report_air_quality_paris.pdf`
+RNCP37827 (Développeur en intelligence artificielle), block BC01 - September 2026 - report: `reports/RNCP_report_air_quality_paris.pdf`
  
 **Goal.** Fine particles are linked to nearly 40,000 deaths a year in France. On the evening of day D, can we tell whether PM2.5 in central Paris will exceed the WHO guideline (15 µg/m³) on day D+1?
  
