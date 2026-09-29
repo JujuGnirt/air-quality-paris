@@ -1,0 +1,285 @@
+# OpenAPI 3 specification of the Air Quality Paris API (src/api_flask.py).
+# Open it in https://editor.swagger.io (File > Import file) to see it as an
+# interactive documentation page. Served by the API at /openapi.yaml.
+openapi: 3.0.3
+info:
+  title: Air Quality Paris API
+  version: "1.0"
+  description: >
+    Daily air-quality measurements from Airparif stations (2018-2026), stored in
+    MySQL, with the weather of the day (Météo-France) and the official pollution
+    episodes (Airparif). Read-only API: GET requests only. Lists are paginated
+    (default 20, maximum 100 items per page).
+  license:
+    name: "Data: Airparif (ODbL), Météo-France (Licence Ouverte 2.0)"
+servers:
+  - url: http://127.0.0.1:5000
+    description: Local server (python src/api_flask.py)
+
+# Every endpoint requires the API key, except where "security: []" says otherwise
+security:
+  - ApiKeyHeader: []
+
+paths:
+  /stations:
+    get:
+      summary: List of stations (paginated)
+      tags: [stations]
+      parameters:
+        - name: type
+          in: query
+          schema: {type: string, enum: [urban_background, traffic, rural, observation]}
+        - name: name
+          in: query
+          description: Part of the station name (case-insensitive)
+          schema: {type: string}
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/per_page"
+      responses:
+        "200":
+          description: One page of stations
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: {$ref: "#/components/schemas/StationSummary"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+
+  /stations/{station_code}:
+    get:
+      summary: One station, with a summary per pollutant
+      tags: [stations]
+      parameters:
+        - name: station_code
+          in: path
+          required: true
+          example: PA01H
+          schema: {type: string}
+      responses:
+        "200":
+          description: The station and its pollutants
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/StationDetail"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+
+  /measurements:
+    get:
+      summary: Daily measurements (paginated, most recent first)
+      tags: [measurements]
+      parameters:
+        - name: station
+          in: query
+          example: PA01H
+          schema: {type: string}
+        - name: pollutant
+          in: query
+          schema: {type: string, enum: [PM25, PM10, NO2, NOX, O3, CO]}
+        - name: start
+          in: query
+          description: First day (included)
+          schema: {type: string, format: date}
+        - name: end
+          in: query
+          description: Last day (included)
+          schema: {type: string, format: date}
+        - name: min_value
+          in: query
+          description: Keep only days whose daily mean is at least this value
+          schema: {type: number}
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/per_page"
+      responses:
+        "200":
+          description: One page of measurements
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: {$ref: "#/components/schemas/MeasurementSummary"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+
+  /measurements/{measurement_id}:
+    get:
+      summary: One measurement, with station, pollutant, weather and episodes of the day
+      tags: [measurements]
+      parameters:
+        - name: measurement_id
+          in: path
+          required: true
+          schema: {type: integer}
+      responses:
+        "200":
+          description: The measurement and its context
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/MeasurementDetail"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+
+  /:
+    get:
+      summary: HTML documentation page (public)
+      tags: [documentation]
+      security: []
+      responses:
+        "200": {description: HTML page}
+
+  /openapi.yaml:
+    get:
+      summary: This specification (public)
+      tags: [documentation]
+      security: []
+      responses:
+        "200": {description: YAML file}
+
+components:
+  securitySchemes:
+    ApiKeyHeader:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: >
+        Value of API_KEY in secrets/keys.env (never stored in the code or on GitHub).
+        For a quick browser test only, ?api_key= is also accepted.
+
+  parameters:
+    page:
+      name: page
+      in: query
+      schema: {type: integer, minimum: 1, default: 1}
+    per_page:
+      name: per_page
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+
+  responses:
+    BadRequest:
+      description: Invalid parameter (e.g. wrong date format)
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    Unauthorized:
+      description: Missing or invalid API key
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    NotFound:
+      description: Object not found
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: {type: integer, example: 401}
+        message: {type: string, example: "missing or invalid API key: send the header X-API-Key"}
+
+    Page:
+      type: object
+      properties:
+        page: {type: integer}
+        per_page: {type: integer}
+        total_items: {type: integer}
+        total_pages: {type: integer}
+        next_page: {type: string, nullable: true}
+        previous_page: {type: string, nullable: true}
+        filters: {type: object}
+
+    StationSummary:
+      type: object
+      properties:
+        station_code: {type: string, example: PA01H}
+        station_name: {type: string, example: "PARIS 1er Les Halles"}
+        station_type: {type: string, example: urban_background}
+        url: {type: string, example: /stations/PA01H}
+
+    StationDetail:
+      type: object
+      properties:
+        station_code: {type: string}
+        station_name: {type: string}
+        station_type: {type: string}
+        pollutants:
+          type: array
+          items:
+            type: object
+            properties:
+              pollutant_code: {type: string, example: PM25}
+              unit: {type: string}
+              days_measured: {type: integer}
+              first_day: {type: string, format: date}
+              last_day: {type: string, format: date}
+              overall_mean: {type: number}
+              days_above_who_pm25: {type: integer, description: "PM25 only"}
+              measurements_url: {type: string}
+
+    MeasurementSummary:
+      type: object
+      properties:
+        measurement_id: {type: integer}
+        date: {type: string, format: date}
+        station_code: {type: string}
+        pollutant_code: {type: string}
+        mean: {type: number, description: "Daily mean (18-hours-out-of-24 rule)"}
+        max: {type: number, nullable: true}
+        n_hours: {type: integer}
+        unit: {type: string}
+        url: {type: string}
+
+    MeasurementDetail:
+      type: object
+      properties:
+        measurement_id: {type: integer}
+        date: {type: string, format: date}
+        daily_mean: {type: number}
+        hourly_max: {type: number, nullable: true}
+        hours_measured: {type: integer}
+        station:
+          type: object
+          properties:
+            code: {type: string}
+            name: {type: string}
+            type: {type: string}
+            url: {type: string}
+        pollutant:
+          type: object
+          properties:
+            code: {type: string}
+            name: {type: string}
+            unit: {type: string}
+        weather_of_the_day:
+          type: object
+          nullable: true
+          properties:
+            temp_mean_c: {type: number}
+            rain_mm: {type: number}
+            wind_mean_ms: {type: number}
+            pressure_mean_hpa: {type: number}
+        episodes_of_the_day:
+          type: array
+          items:
+            type: object
+            properties:
+              pollutant_code: {type: string}
+              level: {type: string, example: information}
+              source: {type: string}
+              forecast_result: {type: string, nullable: true}
+        above_who_guideline:
+          type: boolean
+          description: PM25 only (daily mean above 15 µg/m³)
